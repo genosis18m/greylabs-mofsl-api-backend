@@ -27,26 +27,8 @@ const callSchema = z.object({
   duration_horizon: z.string().min(1),
 });
 
-export async function POST(req: NextRequest) {
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const result = callSchema.safeParse(body);
-  if (!result.success) {
-    const issues = result.error.issues.map((i) => ({
-      field: i.path.join("."),
-      message: i.message,
-    }));
-    return NextResponse.json({ error: "Validation failed", issues }, { status: 400 });
-  }
-
-  const data = result.data;
-
-  const record = {
+function toRecord(data: z.infer<typeof callSchema>) {
+  return {
     call_id: String(data.call_id),
     advisor_code: data.advisor_code,
     client_code: data.client_code,
@@ -67,15 +49,89 @@ export async function POST(req: NextRequest) {
     expiry_date: data.expiry_date,
     duration_horizon: data.duration_horizon,
   };
+}
+
+function isDuplicate(err: unknown) {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+  );
+}
+
+export async function POST(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // ── BULK: array ──────────────────────────────────────────────────────────
+  if (Array.isArray(body)) {
+    if (body.length === 0) {
+      return NextResponse.json({ error: "Array must not be empty" }, { status: 400 });
+    }
+
+    const parsed = body.map((item, index) => {
+      const result = callSchema.safeParse(item);
+      if (!result.success) {
+        return {
+          index,
+          call_id: null,
+          status: "validation_failed" as const,
+          issues: result.error.issues.map((i) => ({
+            field: i.path.join("."),
+            message: i.message,
+          })),
+        };
+      }
+      return { index, data: result.data };
+    });
+
+    const results = await Promise.all(
+      parsed.map(async (item) => {
+        if ("issues" in item) return item;
+
+        const record = toRecord(item.data);
+        try {
+          const created = await prisma.callRecord.create({ data: record });
+          return { index: item.index, call_id: created.call_id, status: "created" as const };
+        } catch (err) {
+          if (isDuplicate(err)) {
+            return { index: item.index, call_id: record.call_id, status: "duplicate" as const };
+          }
+          console.error(err);
+          return { index: item.index, call_id: record.call_id, status: "error" as const };
+        }
+      })
+    );
+
+    const created = results.filter((r) => r.status === "created").length;
+    const duplicates = results.filter((r) => r.status === "duplicate").length;
+    const failed = results.filter((r) => r.status === "validation_failed" || r.status === "error").length;
+
+    return NextResponse.json(
+      { total: body.length, created, duplicates, failed, results },
+      { status: 207 }
+    );
+  }
+
+  // ── SINGLE: object ───────────────────────────────────────────────────────
+  const result = callSchema.safeParse(body);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => ({
+      field: i.path.join("."),
+      message: i.message,
+    }));
+    return NextResponse.json({ error: "Validation failed", issues }, { status: 400 });
+  }
+
+  const record = toRecord(result.data);
 
   try {
     const created = await prisma.callRecord.create({ data: record });
     return NextResponse.json({ received: true, call_id: created.call_id }, { status: 201 });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    if (isDuplicate(err)) {
       return NextResponse.json({ error: "call_id already exists" }, { status: 409 });
     }
     console.error(err);
