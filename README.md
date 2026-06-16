@@ -47,3 +47,16 @@ npm run dev
 |---|---|
 | `DATABASE_URL` | Neon pooler connection string (pgbouncer=true) |
 | `DIRECT_URL` | Neon direct connection string (for migrations) |
+
+## Deploy on Render
+
+1. Push this repo to GitHub
+2. Create a **Web Service** on [Render](https://render.com) pointing to the repo
+3. Set `DATABASE_URL` and `DIRECT_URL` in the Render environment variables dashboard
+4. Render will auto-run `npm ci && prisma generate && next build` on each deploy
+
+The `render.yaml` in this repo configures the service automatically.
+
+## Database
+
+The `call_records` table lives alongside the existing trade and conversation tables in NeonDB. The dashboard backend can JOIN or query `call_records` against `trade_rows` on `(advisor_code, client_code, stock_name)` with a 7-day window to compute conversion and compliance metrics.
