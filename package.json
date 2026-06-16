@@ -1,0 +1,32 @@
+{
+  "name": "api-for-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@types/pg": "^8.20.0",
+    "dotenv": "^17.4.2",
+    "next": "14.2.35",
+    "pg": "^8.21.0",
+    "prisma": "^7.8.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  }
+}

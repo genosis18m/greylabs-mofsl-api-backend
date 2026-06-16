@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model advisor_hierarchy {
+  id                                              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  advisor_id                                      String    @db.Uuid
+  parent_id                                       String?   @db.Uuid
+  vintage                                         String?   @db.VarChar(20)
+  team_name                                       String?   @db.VarChar(100)
+  level                                           Int?
+  effective_from                                  DateTime  @db.Date
+  effective_to                                    DateTime? @db.Date
+  created_at                                      DateTime  @default(now()) @db.Timestamp(6)
+  advisors_advisor_hierarchy_advisor_idToadvisors advisors  @relation("advisor_hierarchy_advisor_idToadvisors", fields: [advisor_id], references: [id])
+  advisors_advisor_hierarchy_parent_idToadvisors  advisors? @relation("advisor_hierarchy_parent_idToadvisors", fields: [parent_id], references: [id])
+
+  @@unique([advisor_id, effective_from])
+}
+
+model advisors {
+  id                                                       String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  advisor_code                                             String                 @unique @db.VarChar(50)
+  name                                                     String                 @db.VarChar(255)
+  email                                                    String?                @db.VarChar(255)
+  status                                                   String                 @default("active") @db.VarChar(20)
+  created_at                                               DateTime               @default(now()) @db.Timestamp(6)
+  updated_at                                               DateTime               @db.Timestamp(6)
+  advisor_hierarchy_advisor_hierarchy_advisor_idToadvisors advisor_hierarchy[]    @relation("advisor_hierarchy_advisor_idToadvisors")
+  advisor_hierarchy_advisor_hierarchy_parent_idToadvisors  advisor_hierarchy[]    @relation("advisor_hierarchy_parent_idToadvisors")
+  conversation_records                                     conversation_records[]
+  trade_rows                                               trade_rows[]
+}
+
+model audit_log {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type  String?  @db.VarChar(50)
+  entity_id    String?  @db.Uuid
+  action       String?  @db.VarChar(50)
+  before_state Json?
+  after_state  Json?
+  user_id      String?  @db.Uuid
+  user_name    String?  @db.VarChar(255)
+  reason       String?
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([created_at])
+  @@index([entity_type, entity_id])
+}
+
+model client_behaviour_profiles {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_id          String    @db.Uuid
+  risk_category      String?   @db.VarChar(50)
+  approved_products  String[]
+  max_holding_value  Decimal?  @db.Decimal
+  investment_horizon String?   @db.VarChar(20)
+  effective_from     DateTime  @db.Date
+  effective_to       DateTime? @db.Date
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+  clients            clients   @relation(fields: [client_id], references: [id])
+
+  @@unique([client_id, effective_from])
+}
+
+model clients {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  client_code               String                      @unique @db.VarChar(50)
+  name                      String                      @db.VarChar(255)
+  status                    String                      @default("active") @db.VarChar(20)
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                    @db.Timestamp(6)
+  client_behaviour_profiles client_behaviour_profiles[]
+  compliance_flags          compliance_flags[]
+  conversation_records      conversation_records[]
+  trade_rows                trade_rows[]
+}
+
+model compliance_flags {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trade_id            String            @db.Uuid
+  client_id           String            @db.Uuid
+  rule_id             String            @db.Uuid
+  flag_type           String?           @db.VarChar(50)
+  severity            String?           @db.VarChar(20)
+  description         String?
+  status              String            @default("flagged") @db.VarChar(20)
+  resolved_at         DateTime?         @db.Timestamp(6)
+  reviewed_by_user_id String?           @db.Uuid
+  review_note         String?
+  created_at          DateTime          @default(now()) @db.Timestamp(6)
+  updated_at          DateTime          @db.Timestamp(6)
+  clients             clients           @relation(fields: [client_id], references: [id])
+  suitability_rules   suitability_rules @relation(fields: [rule_id], references: [id])
+  trade_rows          trade_rows        @relation(fields: [trade_id], references: [id])
+
+  @@index([client_id])
+  @@index([status, created_at])
+  @@index([trade_id])
+}
+
+model conversation_insights {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id             String                        @db.Uuid
+  insight_type                String?                       @db.VarChar(50)
+  company_mentions            String[]
+  security_mentions           String[]
+  recommendation_evidence     String?
+  interest_detected           Boolean                       @default(false)
+  sentiment_score             Decimal?                      @db.Decimal
+  confidence                  Decimal                       @default(1.0) @db.Decimal
+  raw_payload                 Json?
+  created_at                  DateTime                      @default(now()) @db.Timestamp(6)
+  conversation_records        conversation_records          @relation(fields: [conversation_id], references: [id])
+  match_review_queue          match_review_queue[]
+  matched_trade_insight_links matched_trade_insight_links[]
+}
+
+model conversation_records {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id       String                  @unique @db.VarChar(100)
+  advisor_id            String                  @db.Uuid
+  client_id             String?                 @db.Uuid
+  duration_seconds      Int?
+  started_at            DateTime?               @db.Timestamp(6)
+  ended_at              DateTime?               @db.Timestamp(6)
+  raw_payload           Json?
+  created_at            DateTime                @default(now()) @db.Timestamp(6)
+  updated_at            DateTime                @db.Timestamp(6)
+  conversation_insights conversation_insights[]
+  advisors              advisors                @relation(fields: [advisor_id], references: [id])
+  clients               clients?                @relation(fields: [client_id], references: [id])
+
+  @@index([advisor_id, created_at])
+  @@index([client_id, created_at])
+}
+
+model daily_aggregates {
+  id                              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  aggregate_date                  DateTime @db.Date
+  aggregate_type                  String   @db.VarChar(50)
+  dimension_1                     String   @default("") @db.VarChar(100)
+  dimension_2                     String   @default("") @db.VarChar(100)
+  dimension_3                     String   @default("") @db.VarChar(100)
+  metric_conversations            Int?
+  metric_recommendations          Int?
+  metric_interest                 Int?
+  metric_trades                   Int?
+  metric_revenue                  Decimal? @db.Decimal
+  metric_brokerage                Decimal? @db.Decimal
+  metric_sentiment_avg            Decimal? @db.Decimal
+  metric_match_rate               Decimal? @db.Decimal
+  metric_suitability_breach_count Int?
+  created_at                      DateTime @default(now()) @db.Timestamp(6)
+
+  @@unique([aggregate_date, aggregate_type, dimension_1, dimension_2, dimension_3])
+  @@index([aggregate_date, aggregate_type])
+}
+
+model match_review_queue {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trade_id              String                 @db.Uuid
+  reason                String?                @db.VarChar(100)
+  suggested_insight_id  String?                @db.Uuid
+  status                String                 @default("pending") @db.VarChar(20)
+  reviewed_by_user_id   String?                @db.Uuid
+  reviewed_at           DateTime?              @db.Timestamp(6)
+  decision_note         String?
+  created_at            DateTime               @default(now()) @db.Timestamp(6)
+  updated_at            DateTime               @db.Timestamp(6)
+  conversation_insights conversation_insights? @relation(fields: [suggested_insight_id], references: [id])
+  trade_rows            trade_rows             @relation(fields: [trade_id], references: [id])
+}
+
+model matched_trade_insight_links {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trade_id              String                @db.Uuid
+  insight_id            String                @db.Uuid
+  match_confidence      Decimal?              @db.Decimal
+  match_method          String?               @db.VarChar(50)
+  matched_by_user_id    String?               @db.Uuid
+  matched_at            DateTime?             @db.Timestamp(6)
+  created_at            DateTime              @default(now()) @db.Timestamp(6)
+  conversation_insights conversation_insights @relation(fields: [insight_id], references: [id])
+  trade_rows            trade_rows            @relation(fields: [trade_id], references: [id])
+
+  @@unique([trade_id, insight_id])
+}
+
+model products {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_code      String              @unique @db.VarChar(50)
+  name              String              @db.VarChar(255)
+  category          String?             @db.VarChar(100)
+  created_at        DateTime            @default(now()) @db.Timestamp(6)
+  stock_product_map stock_product_map[]
+  trade_rows        trade_rows[]
+}
+
+model securities {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticker            String?             @db.VarChar(20)
+  isin              String?             @db.VarChar(20)
+  name              String              @db.VarChar(255)
+  company_name      String?             @db.VarChar(255)
+  security_type     String?             @db.VarChar(50)
+  exchange          String?             @db.VarChar(50)
+  status            String              @default("active") @db.VarChar(20)
+  created_at        DateTime            @default(now()) @db.Timestamp(6)
+  security_aliases  security_aliases[]
+  stock_product_map stock_product_map[]
+  trade_rows        trade_rows[]
+
+  @@unique([ticker, isin])
+}
+
+model security_aliases {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  security_id String     @db.Uuid
+  alias       String     @db.VarChar(255)
+  alias_type  String?    @db.VarChar(50)
+  confidence  Decimal    @default(1.0) @db.Decimal
+  created_at  DateTime   @default(now()) @db.Timestamp(6)
+  securities  securities @relation(fields: [security_id], references: [id])
+
+  @@unique([security_id, alias, alias_type])
+}
+
+model stock_product_map {
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  security_id    String     @db.Uuid
+  product_id     String     @db.Uuid
+  effective_from DateTime   @db.Date
+  effective_to   DateTime?  @db.Date
+  created_at     DateTime   @default(now()) @db.Timestamp(6)
+  products       products   @relation(fields: [product_id], references: [id])
+  securities     securities @relation(fields: [security_id], references: [id])
+
+  @@unique([security_id, product_id, effective_from])
+}
+
+model suitability_rules {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rule_code          String             @unique @db.VarChar(100)
+  rule_name          String             @db.VarChar(255)
+  rule_version       Int                @default(1)
+  rule_definition    Json?
+  effective_from     DateTime           @db.Date
+  effective_to       DateTime?          @db.Date
+  created_by_user_id String?            @db.Uuid
+  created_at         DateTime           @default(now()) @db.Timestamp(6)
+  compliance_flags   compliance_flags[]
+}
+
+model trade_rows {
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_id                    String                        @db.Uuid
+  trade_date                  DateTime                      @db.Date
+  advisor_id                  String?                       @db.Uuid
+  advisor_code_raw            String?                       @db.VarChar(50)
+  client_id                   String?                       @db.Uuid
+  client_code_raw             String?                       @db.VarChar(50)
+  security_id                 String?                       @db.Uuid
+  security_raw                String?                       @db.VarChar(100)
+  product_id                  String?                       @db.Uuid
+  product_raw                 String?                       @db.VarChar(100)
+  quantity                    Decimal                       @db.Decimal
+  price                       Decimal                       @db.Decimal
+  brokerage                   Decimal?                      @db.Decimal
+  brokerage_pct               Decimal?                      @db.Decimal
+  trade_value                 Decimal?                      @default(dbgenerated("(quantity * price)")) @db.Decimal
+  raw_row                     Json?
+  created_at                  DateTime                      @default(now()) @db.Timestamp(6)
+  compliance_flags            compliance_flags[]
+  match_review_queue          match_review_queue[]
+  matched_trade_insight_links matched_trade_insight_links[]
+  advisors                    advisors?                     @relation(fields: [advisor_id], references: [id])
+  trade_upload_batches        trade_upload_batches          @relation(fields: [batch_id], references: [id])
+  clients                     clients?                      @relation(fields: [client_id], references: [id])
+  products                    products?                     @relation(fields: [product_id], references: [id])
+  securities                  securities?                   @relation(fields: [security_id], references: [id])
+
+  @@unique([batch_id, trade_date, client_code_raw, security_raw])
+  @@index([advisor_id, trade_date])
+  @@index([client_id, trade_date])
+  @@index([security_id, trade_date])
+}
+
+model trade_upload_batches {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_date    DateTime     @db.Date
+  filename      String?      @db.VarChar(255)
+  file_hash     String?      @db.VarChar(64)
+  total_rows    Int?
+  valid_rows    Int?
+  rejected_rows Int?
+  status        String?      @db.VarChar(20)
+  error_message String?
+  reversed_at   DateTime?    @db.Timestamp(6)
+  created_at    DateTime     @default(now()) @db.Timestamp(6)
+  updated_at    DateTime     @db.Timestamp(6)
+  trade_rows    trade_rows[]
+
+  @@unique([batch_date, file_hash])
+}
+
+model users {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String    @unique @db.VarChar(255)
+  name       String?   @db.VarChar(255)
+  entra_id   String?   @unique @db.VarChar(255)
+  role       String?   @db.VarChar(50)
+  team_scope String?   @db.VarChar(100)
+  status     String    @default("active") @db.VarChar(20)
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  last_login DateTime? @db.Timestamp(6)
+}
+
+model CallRecord {
+  id                     String   @id @default(uuid())
+  call_id                String   @unique
+  advisor_code           String
+  client_code            String
+  timestamp              String
+  duration_sec           String
+  stock_name             String
+  price                  String
+  quantity               String
+  trade_type             String
+  customer_consent       String
+  trade_initiator        String
+  stop_loss_mentioned    String
+  target_price_mentioned String
+  target_value           String
+  stop_loss_value        String
+  contract_type          String
+  strike_price           String
+  expiry_date            String
+  duration_horizon       String
+  createdAt              DateTime @default(now())
+
+  @@map("call_records")
+}
