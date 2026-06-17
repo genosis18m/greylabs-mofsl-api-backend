@@ -81,14 +81,19 @@ function extractTargetValue(params: AuditParam[]): string {
   return "0";
 }
 
-// Detect stop loss value — scans for SL / stop.loss near a number
+// Detect stop loss value — only extracts when a number directly follows SL/stop-loss
+// e.g. "SL at 580", "stop loss of 600" — NOT "SL was not mentioned"
 function extractStopLossValue(params: AuditParam[]): string {
   for (const p of params) {
     if (!p.justification) continue;
+    // Skip if stop loss is explicitly stated as missing/not mentioned
+    if (/stop.?loss\s+(was\s+)?not\s+mention|no\s+stop.?loss|sl\s+(was\s+)?not/i.test(p.justification)) {
+      continue;
+    }
     const match = p.justification.match(
-      /(?:stop.?loss|SL|sl)[^\d]{0,20}(\d[\d,.]+)|(\d[\d,.]+)[^\d]{0,20}(?:stop.?loss|SL)/i
+      /(?:stop.?loss|SL)\s+(?:at|of|is|=|:|@)?\s*(\d[\d,.]+)/i
     );
-    if (match) return (match[1] || match[2]).replace(/,/g, "");
+    if (match) return match[1].replace(/,/g, "");
   }
   return "0";
 }
