@@ -97,7 +97,8 @@ function normaliseContractType(v: string | undefined): string {
 // Normalise a numeric-or-NA string to a clean number string
 function normaliseNum(v: string | undefined, fallback = "0"): string {
   if (!v || v.trim().toUpperCase() === "NA" || v.trim() === "") return fallback;
-  return v.replace(/,/g, "").trim();
+  // strip commas (thousands separator) and trailing non-digit punctuation (e.g. "1650.")
+  return v.replace(/,/g, "").replace(/[^\d]+$/, "").trim();
 }
 
 // Find an audit_template_parameter by partial name
@@ -146,7 +147,7 @@ function extractTargetValueFallback(params: AuditParam[]): string {
   for (const p of params) {
     if (!p.justification) continue;
     const match = p.justification.match(/target[^\d]{0,20}(\d[\d,.]+)|(\d[\d,.]+)[^\d]{0,20}target/i);
-    if (match) return (match[1] || match[2]).replace(/,/g, "");
+    if (match) return (match[1] || match[2]).replace(/,/g, "").replace(/[^\d]+$/, "");
   }
   return "0";
 }
@@ -157,7 +158,7 @@ function extractStopLossValueFallback(params: AuditParam[]): string {
     if (!p.justification) continue;
     if (/stop.?loss\s+(was\s+)?not\s+mention|no\s+stop.?loss|sl\s+(was\s+)?not/i.test(p.justification)) continue;
     const match = p.justification.match(/(?:stop.?loss|SL)\s+(?:at|of|is|=|:|@)?\s*(\d[\d,.]+)/i);
-    if (match) return match[1].replace(/,/g, "");
+    if (match) return match[1].replace(/,/g, "").replace(/[^\d]+$/, "");
   }
   return "0";
 }
@@ -236,11 +237,11 @@ function mapToCallRecord(detail: z.infer<typeof detailSchema>) {
         return pitchAnswer !== "na" && pitchAnswer !== "poor" ? "yes" : "no";
       })();
 
-  const targetValue = ts?.target_value
+  const targetValue = (ts?.target_value && ts.target_value.toUpperCase() !== "NA")
     ? normaliseNum(ts.target_value)
     : extractTargetValueFallback(params);
 
-  const stopLossValue = ts?.stop_loss_value
+  const stopLossValue = (ts?.stop_loss_value && ts.stop_loss_value.toUpperCase() !== "NA")
     ? normaliseNum(ts.stop_loss_value)
     : extractStopLossValueFallback(params);
 
@@ -255,8 +256,8 @@ function mapToCallRecord(detail: z.infer<typeof detailSchema>) {
     ? ts.duration_horizon.toLowerCase()
     : extractDurationHorizonFallback(params);
 
-  const price = ts?.price ? normaliseNum(ts.price) : "0";
-  const quantity = ts?.quantity ? normaliseNum(ts.quantity) : "0";
+  const price = (ts?.price && ts.price.toUpperCase() !== "NA") ? normaliseNum(ts.price) : "0";
+  const quantity = (ts?.quantity && ts.quantity.toUpperCase() !== "NA") ? normaliseNum(ts.quantity) : "0";
 
   return {
     call_id: String(detail.id),
