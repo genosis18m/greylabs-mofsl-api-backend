@@ -16,12 +16,25 @@ const detailSchema = z.object({
   total_call_duration: z.number(),
   time: z.string(),
   client_metadata: z.object({
-    clientcode: z.string(),
+    // MOFSL format
+    clientcode: z.string().optional(),
     empcode: z.union([z.string(), z.number()]).optional(),
+    // GoodScore / generic format
+    customer_id: z.string().optional(),
+    agent_id: z.string().optional(),
+    Call_ID: z.string().optional(),
+    call_duration: z.union([z.string(), z.number()]).optional(),
     recording_duration: z.union([z.string(), z.number()]).optional(),
-  }),
+    Lender: z.string().optional(),
+    Campaign_Name: z.string().optional(),
+  }).passthrough(), // allow any extra client_metadata fields
   audit_template_parameters: z.array(auditParamSchema).optional().default([]),
-  // extra top-level fields present in real payload — captured but not required
+  insights: z.object({
+    subjective_data: z.array(z.object({
+      audit_parameter_name: z.string(),
+      answer: z.string(),
+    })).optional().default([]),
+  }).optional(),
   agent_name: z.string().optional(),
   detected_language: z.string().optional(),
   call_quality_score: z.number().optional(),
@@ -158,29 +171,45 @@ function extractContractType(params: AuditParam[], transcript?: string): string 
 function mapToCallRecord(detail: z.infer<typeof detailSchema>) {
   const params = detail.audit_template_parameters;
   const transcript = detail.transcript;
+  const cm = detail.client_metadata;
+
+  // advisor_code: empcode (MOFSL) → agent_id → agent
+  const advisorCode = String(cm.empcode ?? cm.agent_id ?? detail.agent);
+
+  // client_code: clientcode (MOFSL) → Call_ID → customer_id → "unknown"
+  const clientCode = cm.clientcode ?? cm.Call_ID ?? cm.customer_id ?? "unknown";
+
+  // duration: total_call_duration → call_duration → recording_duration
+  const duration = String(
+    detail.total_call_duration || cm.call_duration || cm.recording_duration || 0
+  );
+
+  // stock_name: from insights.subjective_data "Lender Name Identification"
+  // then audit justifications, then transcript
+  const lenderInsight = detail.insights?.subjective_data?.find(
+    (s) => s.audit_parameter_name.toLowerCase().includes("lender name")
+  );
+  const stockName = lenderInsight?.answer
+    ? lenderInsight.answer.trim()
+    : cm.Lender
+    ? cm.Lender.trim()
+    : extractStockName(params, transcript);
 
   const pitchParam = findParam(params, "in-house call pitch");
   const pitchAnswer = pitchParam?.answer?.toLowerCase() ?? "na";
 
-  // SL mentioned = Excellent or Good rating on pitch
   const stopLossMentioned =
     pitchAnswer === "excellent" || pitchAnswer === "good" ? "yes" : "no";
-
-  // Target mentioned = anything other than NA or Poor
   const targetMentioned =
     pitchAnswer !== "na" && pitchAnswer !== "poor" ? "yes" : "no";
 
   return {
     call_id: String(detail.id),
-    advisor_code: String(detail.client_metadata.empcode ?? detail.agent),
-    client_code: detail.client_metadata.clientcode,
+    advisor_code: advisorCode,
+    client_code: clientCode,
     timestamp: detail.time,
-    duration_sec: String(
-      detail.total_call_duration ||
-        detail.client_metadata.recording_duration ||
-        0
-    ),
-    stock_name: extractStockName(params, transcript),
+    duration_sec: duration,
+    stock_name: stockName,
     price: "0",
     quantity: "0",
     trade_type: extractTradeType(params, transcript),
