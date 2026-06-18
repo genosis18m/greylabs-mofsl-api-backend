@@ -10,10 +10,12 @@ const auditParamSchema = z.object({
   audit_parameter_category_name: z.string().optional(),
 });
 
+const numOrStr = z.union([z.number(), z.string().transform((v) => parseFloat(v))]);
+
 const detailSchema = z.object({
   id: z.union([z.string(), z.number()]),
   agent: z.union([z.string(), z.number()]),
-  total_call_duration: z.number(),
+  total_call_duration: numOrStr,
   time: z.string(),
   client_metadata: z.record(z.string(), z.unknown()).default({}),
   audit_template_parameters: z.array(auditParamSchema).optional().default([]),
@@ -25,8 +27,8 @@ const detailSchema = z.object({
   }).optional(),
   agent_name: z.string().optional(),
   detected_language: z.string().optional(),
-  call_quality_score: z.number().optional(),
-  audit_compliance_score: z.number().optional(),
+  call_quality_score: numOrStr.optional(),
+  audit_compliance_score: numOrStr.optional(),
   transcript: z.string().optional(),
   function_calling_parameters: z.record(z.string(), z.unknown()).optional(),
 });
