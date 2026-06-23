@@ -320,6 +320,65 @@ model users {
   last_login DateTime? @db.Timestamp(6)
 }
 
+// ── v2 ingestion: one call → many trades ───────────────────────────────────
+model Call {
+  id                            String   @id @default(uuid())
+  call_id                       String   @unique
+  advisor_name_stated           String?
+  right_party                   String?
+  client_age_stated             Int?
+  primary_topic                 String?
+  unconditional_assurance_given Boolean  @default(false)
+  assurance_quote               String?
+  misinformation_suspected      Boolean  @default(false)
+  raw_payload                   Json?
+  createdAt                     DateTime @default(now())
+  trades                        Trade[]
+
+  @@map("calls")
+}
+
+model Trade {
+  id                      String   @id @default(uuid())
+  call                    Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  callId                  String
+  position_index          Int      @default(0)
+  instrument_type         String?
+  underlying_spoken       String?
+  underlying              String?
+  underlying_alternatives String[]
+  name_confidence         Float?
+  option_type             String?
+  strike_price            Decimal?
+  expiry_hint             String?
+  side                    String?
+  quantity_value          Decimal?
+  quantity_unit           String?
+  price                   Decimal?
+  price_type              String?
+  product_hint            String?
+  trade_initiator         String?
+  recommendation_source   String?
+  customer_consent        String?
+  consent_is_explicit     Boolean  @default(false)
+  consent_quote           String?
+  consent_ts              Int?
+  trade_phase             String?
+  action_taken            Boolean  @default(false)
+  stop_loss_mentioned     Boolean  @default(false)
+  stop_loss_value         Decimal?
+  target_mentioned        Boolean  @default(false)
+  target_value            Decimal?
+  conditional_exit        Boolean  @default(false)
+  evidence_quote          String?
+  evidence_ts             Int?
+  extraction_confidence   Float?
+  createdAt               DateTime @default(now())
+
+  @@index([callId])
+  @@map("trades")
+}
+
 model CallRecord {
   id                     String   @id @default(uuid())
   call_id                String   @unique
