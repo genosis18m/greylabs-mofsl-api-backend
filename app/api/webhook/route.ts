@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
 const auditParamSchema = z.object({
@@ -285,6 +286,9 @@ function mapToCallRecord(detail: z.infer<typeof detailSchema>) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

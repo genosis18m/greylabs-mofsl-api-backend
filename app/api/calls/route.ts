@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const { searchParams } = req.nextUrl;
 
   const advisor_code        = searchParams.get("advisor_code")        ?? undefined;

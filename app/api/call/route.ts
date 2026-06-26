@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
 const stringOrNumber = z.union([z.string().min(1), z.number()]);
@@ -58,6 +59,9 @@ function isDuplicate(err: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();

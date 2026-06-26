@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
 // New nested shape: { call: {...}, trades: [...] }
@@ -132,6 +133,9 @@ async function ingestOne(raw: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   let body: unknown;
   try {
     body = await req.json();
